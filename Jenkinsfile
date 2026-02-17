@@ -2,36 +2,63 @@ pipeline {
     agent any
 
     environment {
-        PROJECT_NAME = "StudentPortal.Web"
+        // Paths and names
+        PROJECT_FOLDER = "StudentPortal.Web-master\\StudentPortal.Web"
+        CSPROJ = "StudentPortal.Web.csproj"
+        PUBLISH_FOLDER = "${env.WORKSPACE}\\publish"
+
+        // Ubuntu VM
         VM_IP = "192.168.17.134"
         VM_USER = "nikhil"
         APP_FOLDER = "/home/nikhil/StudentPortalApp"
-        SQL_SERVER_IP = "192.168.17.1"  // Your Windows SQL Server IP
+
+        // SQL Server connection
+        SQL_SERVER_IP = "192.168.17.1"  // Replace with your Windows SQL Server IP
+
+        // GitHub SSH credentials ID in Jenkins
+        GIT_CREDENTIALS = "github-ssh"
     }
 
     stages {
 
+        stage('Clone Repository') {
+            steps {
+                // Use SSH key added to Jenkins credentials
+                sshagent([env.GIT_CREDENTIALS]) {
+                    bat 'git clone git@github.com:Nikhilmvk/Student.git'
+                }
+            }
+        }
+
+        stage('Check Workspace') {
+            steps {
+                bat 'dir "${env.WORKSPACE}" /s'
+            }
+        }
+
         stage('Publish .NET Project') {
             steps {
                 bat """
-                dotnet publish "${env.WORKSPACE}\\${PROJECT_NAME}\\StudentPortal.Web.csproj" -c Release -o "${env.WORKSPACE}\\publish"
+                dotnet publish "${env.WORKSPACE}\\${PROJECT_FOLDER}\\${CSPROJ}" -c Release -o "${PUBLISH_FOLDER}"
                 """
             }
         }
 
         stage('Update Connection String') {
             steps {
+                // Replace "localhost" in appsettings.json with your SQL Server IP
                 bat """
-                powershell -Command "(Get-Content '${env.WORKSPACE}\\publish\\appsettings.json') -replace 'localhost', '${SQL_SERVER_IP}' | Set-Content '${env.WORKSPACE}\\publish\\appsettings.json'"
+                powershell -Command "(Get-Content '${PUBLISH_FOLDER}\\appsettings.json') -replace 'localhost', '${SQL_SERVER_IP}' | Set-Content '${PUBLISH_FOLDER}\\appsettings.json'"
                 """
             }
         }
 
         stage('Copy to Ubuntu VM') {
             steps {
-                sshagent(['ubuntu-vm-ssh']) {
+                // Use SSH key added to Jenkins credentials
+                sshagent([env.GIT_CREDENTIALS]) {
                     bat """
-                    pscp -r "${env.WORKSPACE}\\publish\\*" ${VM_USER}@${VM_IP}:${APP_FOLDER}\\
+                    pscp -r "${PUBLISH_FOLDER}\\*" ${VM_USER}@${VM_IP}:${APP_FOLDER}\\
                     """
                 }
             }
@@ -39,7 +66,7 @@ pipeline {
 
         stage('Build & Run Docker on Ubuntu') {
             steps {
-                sshagent(['ubuntu-vm-ssh']) {
+                sshagent([env.GIT_CREDENTIALS]) {
                     bat """
                     ssh ${VM_USER}@${VM_IP} ^
                         docker build -t studentportal:latest ${APP_FOLDER} ^&^&
@@ -49,6 +76,18 @@ pipeline {
                     """
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline finished!'
+        }
+        success {
+            echo 'Deployment succeeded!'
+        }
+        failure {
+            echo 'Deployment failed!'
         }
     }
 }
