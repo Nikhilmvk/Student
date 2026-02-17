@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         PROJECT_NAME = "StudentPortal.Web"
-        GIT_REPO = "https://github.com/YOUR_USERNAME/StudentPortal.Web.git"
+        GIT_REPO = "https://github.com/Nikhilmvk/Student.git"
         VM_IP = "192.168.17.134"
         VM_USER = "nikhil"
         APP_FOLDER = "/home/nikhil/StudentPortalApp"
